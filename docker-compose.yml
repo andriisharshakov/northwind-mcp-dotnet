@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: northwind
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/northwind.sql:/docker-entrypoint-initdb.d/01-northwind.sql
+      - ./db/audit_log.sql:/docker-entrypoint-initdb.d/02-audit.sql
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./src/NorthwindCrm.Api
+      dockerfile: Dockerfile
+    ports:
+      - "5001:80"
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=northwind;Username=postgres;Password=postgres
+      - Auth0__Domain=${AUTH0_DOMAIN}
+      - Auth0__Audience=${AUTH0_AUDIENCE}
+    depends_on:
+      - postgres
+
+  mcp:
+    build:
+      context: ./src/NorthwindCrm.Mcp
+      dockerfile: Dockerfile
+    ports:
+      - "5002:80"
+    environment:
+      - ApiBaseUrl=http://api:80
+      - Auth0__Domain=${AUTH0_DOMAIN}
+      - Auth0__Audience=${AUTH0_AUDIENCE}
+      - Auth0__ClientId=${AUTH0_MCP_CLIENT_ID}
+      - Auth0__ClientSecret=${AUTH0_MCP_CLIENT_SECRET}
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

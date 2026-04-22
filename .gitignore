@@ -31,6 +31,14 @@ artifacts/
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
 
+# Environment / secrets
+appsettings.Development.json
+appsettings.Local.json
+.env
+.env.local
+*.pfx
+*.p12 
+
 # NuGet Packages
 *.nupkg
 # NuGet Symbol Packages
@@ -52,3 +60,14 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Docker
+docker-compose.override.yml 
