@@ -1,3 +1,5 @@
+CREATE DATABASE northwind;
+
 --
 -- PostgreSQL database dump
 --

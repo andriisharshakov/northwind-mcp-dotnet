@@ -34,7 +34,7 @@ By the end of this tutorial you will have:
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  Claude (AI client)              │
+│                  Claude (AI client)             │
 └───────────────────────┬─────────────────────────┘
                         │ MCP Protocol (SSE)
                         ▼
