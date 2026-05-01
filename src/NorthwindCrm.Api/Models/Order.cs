@@ -26,7 +26,7 @@ public class Order
     public DateTime? ShippedDate { get; set; }
 
     [Column("freight")]
-    public decimal? Freight { get; set; }
+    public float? Freight { get; set; }
 
     [Column("ship_name")]
     public string? ShipName { get; set; }

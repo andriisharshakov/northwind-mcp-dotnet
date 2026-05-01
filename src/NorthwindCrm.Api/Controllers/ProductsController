@@ -1,0 +1,59 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using NorthwindCrm.Api.Data;
+using NorthwindCrm.Api.Models;
+
+namespace NorthwindCrm.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class ProductsController : ControllerBase
+{
+    private readonly NorthwindDbContext _db;
+
+    public ProductsController(NorthwindDbContext db)
+    {
+        _db = db;
+    }
+
+    // GET /api/products
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int limit = 20)
+    {
+        var query = _db.Products.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(p => p.ProductName.Contains(search));
+
+        var products = await query
+            .Where(p => !p.Discontinued)
+            .OrderBy(p => p.ProductName)
+            .Take(limit)
+            .ToListAsync();
+
+        return Ok(products);
+    }
+
+    // GET /api/products/1
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var product = await _db.Products.FindAsync(id);
+        if (product is null) return NotFound();
+        return Ok(product);
+    }
+
+    // PATCH /api/products/{id}/price
+    [HttpPatch("{id}/price")]
+    public async Task<IActionResult> UpdatePrice(int id, [FromBody] decimal newPrice)
+    {
+        if (newPrice <= 0) return BadRequest("Price must be greater than zero.");
+
+        var product = await _db.Products.FindAsync(id);
+        if (product is null) return NotFound();
+
+        product.UnitPrice = newPrice;
+        await _db.SaveChangesAsync();
+        return Ok(product);
+    }
+}

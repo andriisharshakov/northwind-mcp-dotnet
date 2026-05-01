@@ -13,7 +13,7 @@ public class OrderDetail
     public int ProductId { get; set; }
 
     [Column("unit_price")]
-    public decimal UnitPrice { get; set; }
+    public float UnitPrice { get; set; }
 
     [Column("quantity")]
     public short Quantity { get; set; }

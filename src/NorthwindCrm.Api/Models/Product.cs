@@ -20,13 +20,13 @@ public class Product
     public int? CategoryId { get; set; }
 
     [Column("unit_price")]
-    public decimal? UnitPrice { get; set; }
+    public float? UnitPrice { get; set; }
 
     [Column("units_in_stock")]
     public short? UnitsInStock { get; set; }
 
     [Column("discontinued")]
-    public bool Discontinued { get; set; }
+    public int Discontinued { get; set; }
 
     [Column("custom_fields", TypeName = "jsonb")]
     public string? CustomFields { get; set; }
