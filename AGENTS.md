@@ -10,7 +10,7 @@ with Auth0 authentication and an AI-assisted audit/QC system.
 - `psql -U postgres -d northwind` — connect to DB
 
 ## SDK pinning
-global.json is located in src/NorthwindCrm.Api/ and pins .NET SDK to 8.0.403 with rollForward: disable.
+global.json in repo root pins .NET SDK to 8.0.403 with rollForward: disable.
 Do not change target framework without updating global.json first.
 
 ## Architecture

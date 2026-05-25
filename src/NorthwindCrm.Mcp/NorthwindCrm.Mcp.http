@@ -1,0 +1,6 @@
+@NorthwindCrm.Mcp_HostAddress = http://localhost:5194
+
+GET {{NorthwindCrm.Mcp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
