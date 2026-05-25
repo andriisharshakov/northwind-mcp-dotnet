@@ -1,0 +1,12 @@
+{
+    "name": "northwind-mcp-dotnet",
+    "version": "1.0.0",
+    "description": "MCP Inspector and dev tooling for northwind-mcp-dotnet",
+    "scripts": {
+      "inspector": "npx @modelcontextprotocol/inspector http://localhost:5194/sse",
+      "inspect:sse": "mcp-inspector --transport sse --url http://localhost:5194/sse"
+    },
+    "devDependencies": {
+      "@modelcontextprotocol/inspector": "latest"
+    }
+  }

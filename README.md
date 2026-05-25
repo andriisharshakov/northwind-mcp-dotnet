@@ -88,6 +88,30 @@ Optional (for Docker setup):
 
 ---
 
+## Quick Start
+
+```powershell
+# 1. Install Node dependencies (MCP Inspector)
+npm install
+
+# 2. Start everything at once
+.\test-mcp.ps1
+
+# Or manually:
+# Terminal 1 — API
+cd src/NorthwindCrm.Api && dotnet run
+
+# Terminal 2 — MCP Server  
+cd src/NorthwindCrm.Mcp && dotnet run
+
+# Terminal 3 — Inspector
+npm run inspector
+```
+
+Then open http://localhost:6274, connect to SSE transport at http://localhost:5194/sse
+
+---
+
 ## Part 1 — Database Setup
 
 ### 1.1 Download Northwind for PostgreSQL

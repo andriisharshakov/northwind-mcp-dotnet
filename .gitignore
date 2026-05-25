@@ -44,6 +44,10 @@ appsettings.Local.json
 # NuGet Symbol Packages
 *.snupkg
 
+# Node
+node_modules/
+package-lock.json
+
 # Others
 ~$*
 *~
