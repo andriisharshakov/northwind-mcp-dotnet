@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NorthwindCrm.Api.Data;
 using NorthwindCrm.Api.Models;
+using NorthwindCrm.Api.Services;
 
 namespace NorthwindCrm.Api.Controllers;
 
@@ -10,10 +11,12 @@ namespace NorthwindCrm.Api.Controllers;
 public class CustomersController : ControllerBase
 {
     private readonly NorthwindDbContext _db;
+    private readonly AuditLogService _audit;
 
-    public CustomersController(NorthwindDbContext db)
+    public CustomersController(NorthwindDbContext db, AuditLogService audit)
     {
         _db = db;
+        _audit = audit;
     }
 
     // GET /api/customers
@@ -52,6 +55,7 @@ public class CustomersController : ControllerBase
     {
         _db.Customers.Add(customer);
         await _db.SaveChangesAsync();
+        await _audit.LogAsync("customer", customer.CustomerId, "INSERT", newValues: customer);
         return CreatedAtAction(nameof(GetById), new { id = customer.CustomerId }, customer);
     }
 
@@ -62,6 +66,8 @@ public class CustomersController : ControllerBase
         var customer = await _db.Customers.FindAsync(id);
         if (customer is null) return NotFound();
 
+        var oldValues = new { customer.CompanyName, customer.ContactName, customer.City };
+
         customer.CompanyName = updated.CompanyName ?? customer.CompanyName;
         customer.ContactName = updated.ContactName ?? customer.ContactName;
         customer.City = updated.City ?? customer.City;
@@ -69,6 +75,7 @@ public class CustomersController : ControllerBase
         customer.Phone = updated.Phone ?? customer.Phone;
 
         await _db.SaveChangesAsync();
+        await _audit.LogAsync("customer", id, "UPDATE", oldValues: oldValues, newValues: customer);
         return Ok(customer);
     }
 
@@ -81,6 +88,7 @@ public class CustomersController : ControllerBase
 
         _db.Customers.Remove(customer);
         await _db.SaveChangesAsync();
+        await _audit.LogAsync("customer", id, "DELETE", oldValues: customer);
         return NoContent();
     }
 }

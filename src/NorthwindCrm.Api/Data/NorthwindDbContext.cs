@@ -13,6 +13,7 @@ public class NorthwindDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<OrderDetail> OrderDetails => Set<OrderDetail>();
+    public DbSet<AuditLogEntry> AuditLogs => Set<AuditLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
