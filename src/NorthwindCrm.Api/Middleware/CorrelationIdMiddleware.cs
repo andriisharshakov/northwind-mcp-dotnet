@@ -1,4 +1,4 @@
-1namespace NorthwindCrm.Api.Middleware;
+namespace NorthwindCrm.Api.Middleware;
 
 public class CorrelationIdMiddleware
 {

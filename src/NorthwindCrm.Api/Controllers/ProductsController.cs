@@ -26,7 +26,7 @@ public class ProductsController : ControllerBase
             query = query.Where(p => p.ProductName.Contains(search));
 
         var products = await query
-            .Where(p => !p.Discontinued)
+            .Where(p => p.Discontinued == 0)
             .OrderBy(p => p.ProductName)
             .Take(limit)
             .ToListAsync();
@@ -52,7 +52,7 @@ public class ProductsController : ControllerBase
         var product = await _db.Products.FindAsync(id);
         if (product is null) return NotFound();
 
-        product.UnitPrice = newPrice;
+        product.UnitPrice = (float)newPrice;
         await _db.SaveChangesAsync();
         return Ok(product);
     }
