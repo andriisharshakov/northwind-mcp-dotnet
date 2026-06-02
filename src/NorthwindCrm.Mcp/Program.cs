@@ -11,7 +11,9 @@ builder.Services.AddHttpClient("northwind-api", client =>
 
 builder.Services.AddMcpServer()
     .WithHttpTransport()
-    .WithTools<CustomerTools>();
+    .WithTools<CustomerTools>()
+    .WithTools<ProductTools>()
+    .WithTools<OrderTools>();
 
 builder.Services.AddSingleton(sp =>
 {

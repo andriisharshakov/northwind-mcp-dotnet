@@ -8,7 +8,7 @@ public class Order
 {
     [Key]
     [Column("order_id")]
-    public int OrderId { get; set; }
+    public short OrderId { get; set; }
 
     [Column("customer_id")]
     public string? CustomerId { get; set; }

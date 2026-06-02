@@ -7,7 +7,7 @@ namespace NorthwindCrm.Api.Models;
 public class OrderDetail
 {
     [Column("order_id")]
-    public int OrderId { get; set; }
+    public short OrderId { get; set; }
 
     [Column("product_id")]
     public int ProductId { get; set; }
