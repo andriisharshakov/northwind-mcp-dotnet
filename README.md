@@ -1,40 +1,148 @@
 # northwind-mcp-dotnet
 
-A practical tutorial showing how to build a **Model Context Protocol (MCP) Server** on top of a real REST API, using the well-known Northwind database as a domain foundation.
+A practical tutorial showing how to build a **Model Context Protocol (MCP) Server** on top of a real REST API in .NET — and what happens when a real AI starts using it.
 
-By the end of this tutorial you will have:
+> **The moment this became real:**  
+> I typed *"Show me the most recent orders"* into Claude.  
+> Claude called `GetOrders`, got back raw JSON, and rendered a beautiful table —  
+> color-coded by country, totals calculated, status badges, German customers highlighted.  
+> No frontend code. No rendering logic. Just data, a protocol, and an intelligent client.
+
+![Claude rendering Northwind orders](docs/images/claude-orders-screenshot.jpg)
+
+The JSON Claude actually received:
+
+```json
+[
+  {
+    "orderId": 11078,
+    "customerId": "ALFKI",
+    "orderDate": "2026-06-02T00:00:00",
+    "shipCity": "Vienna",
+    "shipCountry": "Austria",
+    "customer": {
+      "companyName": "Alfreds Futterkiste",
+      "customFields": "{\"tier\": \"gold\", \"notes\": \"Key account\"}"
+    },
+    "orderDetails": []
+  },
+  {
+    "orderId": 11074,
+    "customerId": "SIMOB",
+    "orderDate": "1998-05-06T00:00:00",
+    "freight": 18.44,
+    "orderDetails": [
+      {
+        "productId": 16,
+        "unitPrice": 17.45,
+        "quantity": 14,
+        "discount": 0.05,
+        "product": { "productName": "Pavlova" }
+      }
+    ]
+  }
+]
+```
+
+Claude didn't just display this — it calculated order totals, spotted that #11078 had no line items yet, noticed the `"tier": "gold"` in custom_fields, and asked a follow-up question. That's the difference between an API and an MCP Server.
+
+---
+
+## What this tutorial covers
+
+By the end you will have:
+
 - A CRUD REST API (ASP.NET Core 8 + EF Core + PostgreSQL)
 - An MCP Server exposing that API as Claude-callable tools (SSE transport)
-- Auth0-based authentication securing both the API and the MCP Server
+- Auth0-based authentication securing both layers
 - An Audit Log with Correlation IDs linking every Claude action to a DB change
+- AI-assisted Quality Control — feeding audit pairs back to Claude for hallucination detection
 - A Docker Compose setup for one-command local startup
 
-> **Why Northwind?**  
-> The schema is universally known — customers, orders, products, employees.  
-> Readers can skip the domain explanation and focus on what matters: MCP, auth, and audit.
+---
+
+## Why this project exists
+
+In late 2024, Anthropic released the Model Context Protocol. The .NET SDK followed shortly after. By early 2025, MCP had 110M+ monthly downloads and was supported by every major AI platform.
+
+Most tutorials show MCP with Python or Node.js, and with toy examples. This one uses:
+
+- **.NET 8** — because most enterprise systems are on .NET
+- **PostgreSQL** — with real-world quirks (snake_case columns, `real` instead of `decimal`, composite PKs)
+- **Northwind** — the universally known sample DB, so you can focus on MCP not domain modeling
+- **Real bugs** — type mismatches, circular references, SDK conflicts — all documented and fixed
 
 ---
 
-## Table of Contents
+## The bugs we hit (and why they matter for AI-assisted development)
 
-1. [Architecture Overview](#architecture-overview)
-2. [Prerequisites](#prerequisites)
-3. [Part 1 — Database Setup](#part-1--database-setup)
-4. [Part 2 — CRUD API](#part-2--crud-api)
-5. [Part 3 — MCP Server](#part-3--mcp-server)
-6. [Part 4 — Auth0 Authentication & Authorization](#part-4--auth0-authentication--authorization)
-7. [Part 5 — Audit Log & Correlation IDs](#part-5--audit-log--correlation-ids)
-8. [Part 6 — AI-Assisted Quality Control](#part-6--ai-assisted-quality-control)
-9. [Part 7 — Docker Compose](#part-7--docker-compose)
-10. [Security Considerations for MCP Servers](#security-considerations-for-mcp-servers)
+This project was built with AI assistance. Here's what broke — and what it tells us about QA in an AI-assisted workflow.
+
+### Bug 1: Type mismatches the compiler couldn't catch
+
+Northwind PostgreSQL uses `real` for float columns and `integer` for booleans. Standard .NET conventions use `decimal` and `bool`. The code compiled fine. It failed at runtime.
+
+```csharp
+// What AI generates (reasonable assumption):
+public bool Discontinued { get; set; }
+public decimal UnitPrice { get; set; }
+
+// What Northwind PostgreSQL actually has:
+public int Discontinued { get; set; }   // 0 or 1
+public float UnitPrice { get; set; }    // real, not numeric
+```
+
+**Lesson:** AI knows .NET conventions. It doesn't know your database. Schema inspection is not optional.
+
+### Bug 2: Circular references in JSON serialization
+
+Adding `Include()` for eager loading is obvious. The resulting `Order → OrderDetail → Order → ...` loop is not.
+
+```csharp
+// Fix:
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler =
+            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
+```
+
+**Lesson:** AI generates code that works in isolation. Integration behavior requires a human who knows the runtime context.
+
+### Bug 3: SDK version conflicts
+
+Three .NET SDKs installed. `dotnet --version` said 9.0.313. `dotnet build` used 8.0.202. The fix was `global.json` with `rollForward: disable` — but finding the cause took time.
+
+```json
+{
+  "sdk": {
+    "version": "8.0.403",
+    "rollForward": "disable"
+  }
+}
+```
+
+**Lesson:** Environment-specific issues are invisible to AI. Toolchain knowledge is still a human responsibility.
+
+### Bug 4: Composite primary key
+
+`order_details` has a composite PK `(order_id, product_id)`. EF Core doesn't infer this. The error only surfaced when loading related data.
+
+```csharp
+modelBuilder.Entity<OrderDetail>()
+    .HasKey(od => new { od.OrderId, od.ProductId });
+```
+
+**Lesson:** AI knows EF Core conventions. It doesn't know your schema until you show it.
 
 ---
 
-## Architecture Overview
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  Claude (AI client)             │
+│                  Claude (AI client)              │
 └───────────────────────┬─────────────────────────┘
                         │ MCP Protocol (SSE)
                         ▼
@@ -43,11 +151,11 @@ By the end of this tutorial you will have:
 │         MCP Server — ASP.NET Core 8             │
 │                                                 │
 │  Tools:                                         │
-│  • search_customers                             │
-│  • get_order                                    │
-│  • create_order                                 │
+│  • search_customers    • get_orders             │
+│  • get_customer        • get_order              │
+│  • get_customer_orders • create_order           │
+│  • search_products     • get_product            │
 │  • update_product_price                         │
-│  • get_employee_sales                           │
 │                                                 │
 │  Auth: Auth0 JWT validation                     │
 │  Audit: Correlation ID → Audit Log              │
@@ -58,9 +166,7 @@ By the end of this tutorial you will have:
 │            NorthwindCrm.Api                     │
 │         REST API — ASP.NET Core 8               │
 │                                                 │
-│  Endpoints: Customers, Orders, Products,        │
-│             Employees                           │
-│                                                 │
+│  Endpoints: Customers, Orders, Products         │
 │  Auth: Auth0 JWT + scope-based authorization    │
 │  ORM:  EF Core 8 + Npgsql                       │
 └───────────────────────┬─────────────────────────┘
@@ -76,39 +182,40 @@ By the end of this tutorial you will have:
 
 ---
 
-## Prerequisites
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- [PostgreSQL 15+](https://www.postgresql.org/download/) (or Docker)
-- [Auth0 account](https://auth0.com/) (free tier is sufficient)
-- Claude Desktop or any MCP-compatible client
-
-Optional (for Docker setup):
-- [Rancher Desktop](https://rancherdesktop.io/) or Docker Desktop
-
----
-
 ## Quick Start
 
 ```powershell
-# 1. Install Node dependencies (MCP Inspector)
+# 1. Clone and set up the database
+git clone https://github.com/andriisharshakov/northwind-mcp-dotnet
+cd northwind-mcp-dotnet
+
+psql -U postgres -c "CREATE DATABASE northwind;"
+psql -U postgres -d northwind -f db/northwind.sql
+psql -U postgres -d northwind -f db/audit_log.sql
+
+# 2. Install Node dependencies (MCP Inspector)
 npm install
 
-# 2. Start everything at once
+# 3. Start everything
 .\test-mcp.ps1
-
-# Or manually:
-# Terminal 1 — API
-cd src/NorthwindCrm.Api && dotnet run
-
-# Terminal 2 — MCP Server  
-cd src/NorthwindCrm.Mcp && dotnet run
-
-# Terminal 3 — Inspector
-npm run inspector
 ```
 
-Then open http://localhost:6274, connect to SSE transport at http://localhost:5194/sse
+Then open:
+- **API + Swagger:** http://localhost:5185/swagger
+- **MCP Inspector:** http://localhost:6274 → connect to `http://localhost:5194/sse`
+
+---
+
+## Table of Contents
+
+1. [Part 1 — Database Setup](#part-1--database-setup)
+2. [Part 2 — CRUD API](#part-2--crud-api)
+3. [Part 3 — MCP Server](#part-3--mcp-server)
+4. [Part 4 — Auth0 Authentication & Authorization](#part-4--auth0-authentication--authorization)
+5. [Part 5 — Audit Log & Correlation IDs](#part-5--audit-log--correlation-ids)
+6. [Part 6 — AI-Assisted Quality Control](#part-6--ai-assisted-quality-control)
+7. [Part 7 — Docker Compose](#part-7--docker-compose)
+8. [Security Considerations for MCP Servers](#security-considerations-for-mcp-servers)
 
 ---
 
@@ -117,27 +224,24 @@ Then open http://localhost:6274, connect to SSE transport at http://localhost:51
 ### 1.1 Download Northwind for PostgreSQL
 
 ```bash
-# Clone the PostgreSQL port of Northwind
-git clone https://github.com/pthom/northwind_psql.git
+curl -o db/northwind.sql https://raw.githubusercontent.com/pthom/northwind_psql/master/northwind.sql
 ```
 
 ### 1.2 Create the database and import
 
 ```bash
 psql -U postgres -c "CREATE DATABASE northwind;"
-psql -U postgres -d northwind -f northwind_psql/northwind.sql
-```
-
-Or use DBeaver: open `northwind.sql` → Execute.
-
-### 1.3 Add our extensions (Audit Log + JSONB)
-
-```bash
+psql -U postgres -d northwind -f db/northwind.sql
 psql -U postgres -d northwind -f db/audit_log.sql
-psql -U postgres -d northwind -f db/custom_fields_migration.sql
 ```
 
-See [`db/`](./db/) for the full scripts with comments.
+### 1.3 What audit_log.sql adds
+
+- `audit_log` table — links every Claude action to the DB change it caused
+- `custom_fields JSONB` on customers, products, orders, employees
+- GIN indexes for efficient JSONB querying
+
+See [`db/audit_log.sql`](./db/audit_log.sql) for the full script with comments.
 
 ---
 
@@ -145,29 +249,35 @@ See [`db/`](./db/) for the full scripts with comments.
 
 **Project:** `src/NorthwindCrm.Api`
 
-### Stack
-- ASP.NET Core 8 Web API
-- EF Core 8 + Npgsql
-- Auth0 JWT authentication
-- Swagger / OpenAPI
-
 ### Key endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/customers` | List customers (supports `?search=`) |
+| GET | `/api/customers` | List/search customers |
 | GET | `/api/customers/{id}` | Get customer by ID |
+| GET | `/api/orders` | List orders (filter by customerId) |
 | GET | `/api/orders/{id}` | Get order with line items |
 | POST | `/api/orders` | Create new order |
+| GET | `/api/products` | List/search products |
 | PATCH | `/api/products/{id}/price` | Update product price |
-| GET | `/api/employees/{id}/sales` | Sales summary for employee |
 
-### Running locally
+### EF Core gotchas with Northwind PostgreSQL
 
-```bash
-cd src/NorthwindCrm.Api
-dotnet run
-# Swagger UI: https://localhost:5001/swagger
+```csharp
+// Composite PK — must be explicit
+modelBuilder.Entity<OrderDetail>()
+    .HasKey(od => new { od.OrderId, od.ProductId });
+
+// PostgreSQL uses real, not numeric
+public float? UnitPrice { get; set; }
+public float? Freight { get; set; }
+
+// PostgreSQL uses integer, not boolean
+public int Discontinued { get; set; }
+
+// snake_case column mapping
+[Column("company_name")]
+public string CompanyName { get; set; } = null!;
 ```
 
 ---
@@ -178,290 +288,179 @@ dotnet run
 
 ### What is MCP?
 
-Model Context Protocol (MCP) is an open standard that lets AI models like Claude call external tools in a structured, type-safe way. Instead of writing custom integration code for every AI feature, you define **tools** with **input schemas** — and Claude decides when and how to call them based on natural language.
+Model Context Protocol is an open standard (Anthropic, Nov 2024 — now Linux Foundation AAIF) that lets AI models call external tools in a structured, type-safe way. Instead of writing custom integration code for every AI feature, you define **tools** with **input schemas** — and Claude decides when and how to call them.
 
 ### Transport: SSE vs stdio
 
 | Transport | When to use |
 |-----------|-------------|
-| **stdio** | Local tools — MCP server runs as a child process of the client |
-| **SSE** | Remote/cloud servers — persistent HTTP connection, server pushes results |
+| **stdio** | Local tools — MCP server runs as child process of the client |
+| **SSE** | Remote/cloud servers — persistent HTTP connection |
 
-We use **SSE** because our MCP server is a deployed service, not a local process.
+We use **SSE** because our MCP server is a deployed service.
 
-### Tool definitions
-
-Each tool has a name, description, and JSON Schema for its inputs.  
-Claude reads the descriptions to decide which tool to call.
-
-Example — `search_customers`:
+### Tool definition example
 
 ```csharp
-[McpTool("search_customers", "Search Northwind customers by name, contact, or city")]
-public async Task<string> SearchCustomers(
-    [McpParameter("query", "Customer name, contact person, or city")] string query,
-    [McpParameter("limit", "Max results to return")] int limit = 10)
+[McpServerToolType]
+public class CustomerTools
 {
-    var result = await _httpClient.GetFromJsonAsync<List<CustomerDto>>(
-        $"/api/customers?search={query}&limit={limit}");
-    return JsonSerializer.Serialize(result);
+    private readonly HttpClient _http;
+
+    public CustomerTools(HttpClient http) => _http = http;
+
+    [McpServerTool, Description("Search Northwind customers by company name, contact name, or city")]
+    public async Task<string> SearchCustomers(
+        [Description("Company name, contact person, or city")] string query,
+        [Description("Maximum number of results")] int limit = 10)
+    {
+        var response = await _http.GetAsync($"/api/customers?search={query}&limit={limit}");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
 }
 ```
 
-### Full tool list
+Claude reads the `Description` attributes to decide which tool to call and with what parameters.
 
-| Tool | Description |
-|------|-------------|
-| `search_customers` | Search by name / contact / city |
-| `get_order` | Full order details with line items |
-| `create_order` | Place a new order for a customer |
-| `update_product_price` | Change product unit price |
-| `get_employee_sales` | Sales summary for an employee |
+### Minimal Program.cs
 
-### Running locally
+```csharp
+builder.Services.AddMcpServer()
+    .WithHttpTransport()
+    .WithTools<CustomerTools>()
+    .WithTools<ProductTools>()
+    .WithTools<OrderTools>();
 
-```bash
-cd src/NorthwindCrm.Mcp
-dotnet run
-# MCP SSE endpoint: https://localhost:5002/sse
+app.MapMcp();
 ```
+
+That's it. `AddMcpServer()` and `MapMcp()` come from the `ModelContextProtocol.AspNetCore` NuGet package.
 
 ---
 
 ## Part 4 — Auth0 Authentication & Authorization
 
-This is one of the most important sections — securing an MCP Server has nuances that differ from securing a regular API.
-
-### 4.1 How auth flows through the stack
+### Auth flow
 
 ```
-Claude client
-    │
-    │  1. User authenticates with Auth0
-    │     → receives JWT access token
-    │
-    ▼
-MCP Server  ──── validates JWT ────► Auth0 JWKS endpoint
-    │
-    │  2. MCP Server calls API
-    │     → forwards JWT (or exchanges for service token)
-    │
-    ▼
-REST API  ──── validates JWT ────► Auth0 JWKS endpoint
-    │
-    ▼
-PostgreSQL  (no direct external access)
+Claude client → Auth0 → JWT → MCP Server (validates) → API (validates) → PostgreSQL
 ```
 
-### 4.2 Auth0 setup
+### Scopes per tool
 
-1. Create an **API** in Auth0 dashboard
-   - Identifier (audience): `https://northwind-crm-api`
-   - Signing algorithm: RS256
+| Scope | Tools |
+|-------|-------|
+| `read:customers` | `SearchCustomers`, `GetCustomer`, `GetCustomerOrders` |
+| `read:orders` | `GetOrder`, `GetOrders` |
+| `write:orders` | `CreateOrder` |
+| `write:products` | `UpdateProductPrice` |
+| `read:products` | `SearchProducts`, `GetProduct` |
 
-2. Create a **Machine-to-Machine Application** for the MCP Server
-   - Grants: `client_credentials`
-   - Authorized scopes: `read:customers write:orders read:products`
-
-3. Create a **Regular Web Application** for the frontend / Claude Desktop
-   - Callback URLs, logout URLs as needed
-
-### 4.3 Scopes and permissions
-
-Define granular scopes — MCP tools should only request what they need:
-
-| Scope | Tools that require it |
-|-------|-----------------------|
-| `read:customers` | `search_customers` |
-| `read:orders` | `get_order` |
-| `write:orders` | `create_order` |
-| `write:products` | `update_product_price` |
-| `read:reports` | `get_employee_sales` |
-
-### 4.4 Validating JWT in ASP.NET Core
+### JWT validation in ASP.NET Core
 
 ```csharp
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = $"https://{builder.Configuration["Auth0:Domain"]}/";
-        options.Audience = builder.Configuration["Auth0:Audience"];
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-        };
+        options.Authority = $"https://{config["Auth0:Domain"]}/";
+        options.Audience = config["Auth0:Audience"];
     });
-
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("read:orders", policy =>
-        policy.RequireClaim("scope", "read:orders"));
-});
 ```
 
-### 4.5 Security considerations specific to MCP Servers
-
-MCP Servers introduce security challenges that regular APIs don't have:
-
-**Prompt injection attacks**  
-A malicious user can craft natural language input that tricks Claude into calling destructive tools. Mitigations:
-- Never expose tools like `delete_all_customers` — keep write tools narrow and specific
-- Validate tool inputs server-side regardless of what Claude sends
-- Log all tool calls with the original user prompt for audit
-
-**Scope creep via chaining**  
-Claude may chain multiple tool calls to achieve something no single tool would allow. Mitigations:
-- Apply rate limiting per user/session on the MCP Server
-- Set a max tool calls per session limit
-- Require re-authentication for sensitive write operations
-
-**Token forwarding**  
-Decide whether the MCP Server forwards the user's token to the API (delegation) or uses its own service token (machine-to-machine). Each has trade-offs:
-
-| Approach | Pro | Con |
-|----------|-----|-----|
-| Forward user token | Full user context in audit log | Token exposure risk |
-| M2M service token | Simpler, no token exposure | Loses user identity downstream |
-| Token exchange (RFC 8693) | Best of both | More complex setup |
-
-For this tutorial we use **M2M with user context passed as a claim header** — a pragmatic middle ground.
+See [`docs/mcp-security.md`](./docs/mcp-security.md) for the full security overview including prompt injection mitigation, token forwarding strategies, and production checklist.
 
 ---
 
 ## Part 5 — Audit Log & Correlation IDs
 
-Every action Claude takes must be traceable. The audit system links:
+Every Claude action is traceable:
 
 ```
-User prompt → MCP tool call(s) → API request(s) → DB change(s)
+User prompt → MCP tool call → API request → DB change
+     └──────────── correlation_id ─────────────────┘
 ```
 
-### 5.1 Correlation ID middleware
-
-Added to both MCP Server and API:
+### Correlation ID middleware
 
 ```csharp
-app.Use(async (context, next) =>
+public async Task Invoke(HttpContext context)
 {
     var correlationId = context.Request.Headers["X-Correlation-ID"].FirstOrDefault()
         ?? Guid.NewGuid().ToString();
     context.Items["CorrelationId"] = correlationId;
     context.Response.Headers["X-Correlation-ID"] = correlationId;
-    await next();
-});
+    await _next(context);
+}
 ```
 
-The MCP Server generates a `correlationId` per user prompt and passes it to every API call it makes.
-
-### 5.2 Audit log schema
+### Audit log schema
 
 ```sql
 CREATE TABLE audit_log (
     id              BIGSERIAL PRIMARY KEY,
-    correlation_id  UUID NOT NULL,
+    correlation_id  UUID        NOT NULL,
     user_prompt     TEXT,           -- original natural language request
     tool_name       TEXT,           -- which MCP tool was called
     tool_input      JSONB,          -- parameters Claude passed
-    entity_type     TEXT,           -- e.g. 'order', 'product'
+    entity_type     TEXT,
     entity_id       TEXT,
-    action          TEXT,           -- INSERT / UPDATE / DELETE
+    action          TEXT NOT NULL,  -- INSERT / UPDATE / DELETE
     old_values      JSONB,
     new_values      JSONB,
-    performed_by    TEXT,           -- user identity
+    performed_by    TEXT,
     performed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX idx_audit_correlation ON audit_log(correlation_id);
-CREATE INDEX idx_audit_performed_at ON audit_log(performed_at DESC);
-```
-
-### 5.3 Querying suspicious pairs
-
-Find cases where the prompt and the actual DB action don't match:
-
-```sql
-SELECT
-    correlation_id,
-    user_prompt,
-    tool_name,
-    tool_input,
-    entity_type,
-    action,
-    new_values
-FROM audit_log
-WHERE performed_at >= NOW() - INTERVAL '24 hours'
-ORDER BY performed_at DESC;
 ```
 
 ---
 
 ## Part 6 — AI-Assisted Quality Control
 
-Once audit log is in place, we can feed it to Claude for automated review.
-
-### Concept
+With the audit log in place, we can feed prompt/action pairs back to Claude for review:
 
 ```
 Audit Log (last N hours)
-        │
-        ▼
-  Claude API call
-  "Review these prompt/action pairs.
-   Flag any where the action seems
-   inconsistent with the user intent."
-        │
-        ▼
+        ↓
+  Claude API: "Review these prompt/action pairs.
+               Flag any where the action seems
+               inconsistent with user intent."
+        ↓
   Flagged pairs → Slack / email to reviewers
 ```
 
-### What Claude looks for
-
+**What Claude looks for:**
 - Prompt says "find customer" but `create_order` was called
-- Prompt mentions one customer but a different entity was modified
-- Unusually large quantity or price values
-- Multiple destructive operations in a short session
+- Prompt mentions ALFKI but a different entity was modified
+- Unusually large quantities or prices
+- Multiple write operations from a single read-only prompt
 
-### Why this matters
-
-This creates a feedback loop for catching hallucinations early — especially important during the rollout phase when prompt engineering is still being refined.
-
-See [`docs/mcp-qa-concept.md`](./docs/mcp-qa-concept.md) for full design.
+See [`docs/mcp-qa-concept.md`](./docs/mcp-qa-concept.md) for the full design including the `review_queue` schema and rollout strategy.
 
 ---
 
 ## Part 7 — Docker Compose
 
-For readers with Docker available:
-
 ```yaml
-# docker-compose.yml
 services:
   postgres:
     image: postgres:16
     environment:
       POSTGRES_DB: northwind
       POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - ./db/northwind.sql:/docker-entrypoint-initdb.d/01-northwind.sql
       - ./db/audit_log.sql:/docker-entrypoint-initdb.d/02-audit.sql
 
   api:
     build: ./src/NorthwindCrm.Api
-    ports:
-      - "5001:80"
-    depends_on:
-      - postgres
+    ports: ["5185:80"]
+    depends_on: [postgres]
 
   mcp:
     build: ./src/NorthwindCrm.Mcp
-    ports:
-      - "5002:80"
-    depends_on:
-      - api
+    ports: ["5194:80"]
+    depends_on: [api]
 ```
 
 ```bash
@@ -472,27 +471,21 @@ docker compose up
 
 ## Security Considerations for MCP Servers
 
-A dedicated overview of the security landscape for MCP-based systems.  
-See [`docs/mcp-security.md`](./docs/mcp-security.md) for the full document.
+See [`docs/mcp-security.md`](./docs/mcp-security.md).
 
-**Key topics covered:**
-- Authentication: OAuth2 / JWT for MCP (the emerging MCP auth spec)
-- Authorization: scope-based vs relationship-based (ReBAC with OpenFGA)
-- Prompt injection and tool abuse mitigation
-- Token handling: delegation vs M2M vs token exchange
-- Audit and compliance requirements
-- Rate limiting and session management
+Key topics: OAuth2/JWT for MCP, scope-based vs ReBAC authorization, prompt injection mitigation, token forwarding strategies (delegation vs M2M vs RFC 8693 exchange), rate limiting, audit requirements.
 
 ---
 
 ## Project Status
 
-- [ ] Part 1 — Database setup
-- [ ] Part 2 — CRUD API
-- [ ] Part 3 — MCP Server (tools)
+- [x] Part 1 — Database setup
+- [x] Part 2 — CRUD API (Customers, Orders, Products)
+- [x] Part 3 — MCP Server (9 tools, verified with Claude.ai)
+- [x] Audit Log + Correlation ID middleware
 - [ ] Part 4 — Auth0 integration
-- [ ] Part 5 — Audit Log
-- [ ] Part 6 — AI QC concept
+- [ ] Part 5 — Audit Log wired to MCP Server
+- [ ] Part 6 — AI QC reviewer
 - [ ] Part 7 — Docker Compose
 
 ---
