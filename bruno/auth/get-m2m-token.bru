@@ -1,0 +1,25 @@
+meta {
+  name: Get M2M Token (Client Credentials)
+  type: http
+  seq: 1
+}
+
+post {
+  url: https://{{auth0Domain}}/oauth/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-url-encoded {
+  grant_type: client_credentials
+  client_id: {{clientId}}
+  client_secret: {{clientSecret}}
+  audience: {{audience}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("accessToken", res.body.access_token);
+    console.log("Token saved. Expires in:", res.body.expires_in, "seconds");
+  }
+}

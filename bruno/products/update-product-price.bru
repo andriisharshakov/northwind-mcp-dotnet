@@ -1,0 +1,19 @@
+meta {
+  name: Update Product Price
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/products/1/price
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  19.99
+}

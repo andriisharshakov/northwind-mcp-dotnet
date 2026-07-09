@@ -1,0 +1,15 @@
+meta {
+  name: Delete Order
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/orders/11078
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Create Order
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/orders
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "customerId": "ALFKI",
+    "employeeId": 1,
+    "shipCity": "Vienna",
+    "shipCountry": "Austria",
+    "orderDetails": []
+  }
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Get All Customers
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/customers
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+query {
+  ~search: berlin
+  ~limit: 20
+}

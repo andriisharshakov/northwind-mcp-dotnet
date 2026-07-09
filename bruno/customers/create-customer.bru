@@ -1,0 +1,27 @@
+meta {
+  name: Create Customer
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/customers
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "customerId": "TESTC",
+    "companyName": "Test Company GmbH",
+    "contactName": "John Doe",
+    "contactTitle": "CEO",
+    "city": "Vienna",
+    "country": "Austria",
+    "phone": "+43-1-1234567"
+  }
+}

@@ -1,0 +1,21 @@
+meta {
+  name: 403 - Valid Token, Wrong Scope
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/products/1/price
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Use a token that only has read:products scope to verify that
+  write:products is properly enforced. Update the token variable
+  manually before running this test.
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Update Customer
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/customers/TESTC
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "city": "Graz",
+    "phone": "+43-316-9999999"
+  }
+}
