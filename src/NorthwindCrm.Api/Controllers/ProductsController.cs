@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using NorthwindCrm.Api.Auth;
 using NorthwindCrm.Api.Data;
 using NorthwindCrm.Api.Models;
 
@@ -7,6 +9,7 @@ namespace NorthwindCrm.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ProductsController : ControllerBase
 {
     private readonly NorthwindDbContext _db;
@@ -18,6 +21,7 @@ public class ProductsController : ControllerBase
 
     // GET /api/products
     [HttpGet]
+    [Authorize(Policy = AuthPolicies.ReadProducts)]
     public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int limit = 20)
     {
         var query = _db.Products.AsQueryable();
@@ -36,6 +40,7 @@ public class ProductsController : ControllerBase
 
     // GET /api/products/1
     [HttpGet("{id}")]
+    [Authorize(Policy = AuthPolicies.ReadProducts)]
     public async Task<IActionResult> GetById(int id)
     {
         var product = await _db.Products.FindAsync(id);
@@ -45,6 +50,7 @@ public class ProductsController : ControllerBase
 
     // PATCH /api/products/{id}/price
     [HttpPatch("{id}/price")]
+    [Authorize(Policy = AuthPolicies.WriteProducts)]
     public async Task<IActionResult> UpdatePrice(int id, [FromBody] decimal newPrice)
     {
         if (newPrice <= 0) return BadRequest("Price must be greater than zero.");

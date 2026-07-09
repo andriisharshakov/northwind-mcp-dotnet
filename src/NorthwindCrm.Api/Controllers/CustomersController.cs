@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using NorthwindCrm.Api.Auth;
 using NorthwindCrm.Api.Data;
 using NorthwindCrm.Api.Models;
 using NorthwindCrm.Api.Services;
@@ -8,6 +10,8 @@ namespace NorthwindCrm.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize] // require a valid JWT for every action in this controller; specific
+            // policies below narrow it further per scope
 public class CustomersController : ControllerBase
 {
     private readonly NorthwindDbContext _db;
@@ -22,6 +26,7 @@ public class CustomersController : ControllerBase
     // GET /api/customers
     // GET /api/customers?search=berlin
     [HttpGet]
+    [Authorize(Policy = AuthPolicies.ReadCustomers)]
     public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int limit = 20)
     {
         var query = _db.Customers.AsQueryable();
@@ -42,6 +47,7 @@ public class CustomersController : ControllerBase
 
     // GET /api/customers/ALFKI
     [HttpGet("{id}")]
+    [Authorize(Policy = AuthPolicies.ReadCustomers)]
     public async Task<IActionResult> GetById(string id)
     {
         var customer = await _db.Customers.FindAsync(id);
@@ -51,6 +57,7 @@ public class CustomersController : ControllerBase
 
     // POST /api/customers
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.WriteCustomers)]
     public async Task<IActionResult> Create(Customer customer)
     {
         _db.Customers.Add(customer);
@@ -61,6 +68,7 @@ public class CustomersController : ControllerBase
 
     // PATCH /api/customers/{id}
     [HttpPatch("{id}")]
+    [Authorize(Policy = AuthPolicies.WriteCustomers)]
     public async Task<IActionResult> Update(string id, Customer updated)
     {
         var customer = await _db.Customers.FindAsync(id);
@@ -81,6 +89,7 @@ public class CustomersController : ControllerBase
 
     // DELETE /api/customers/{id}
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthPolicies.WriteCustomers)]
     public async Task<IActionResult> Delete(string id)
     {
         var customer = await _db.Customers.FindAsync(id);

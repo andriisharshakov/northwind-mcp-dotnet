@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using NorthwindCrm.Api.Auth;
 using NorthwindCrm.Api.Data;
 using NorthwindCrm.Api.Models;
 
@@ -7,6 +9,7 @@ namespace NorthwindCrm.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class OrdersController : ControllerBase
 {
     private readonly NorthwindDbContext _db;
@@ -18,6 +21,7 @@ public class OrdersController : ControllerBase
 
     // GET /api/orders?customerId=ALFKI
     [HttpGet]
+    [Authorize(Policy = AuthPolicies.ReadOrders)]
     public async Task<IActionResult> GetAll([FromQuery] string? customerId, [FromQuery] int limit = 20)
     {
         var query = _db.Orders
@@ -39,6 +43,7 @@ public class OrdersController : ControllerBase
 
     // GET /api/orders/10248
     [HttpGet("{id}")]
+    [Authorize(Policy = AuthPolicies.ReadOrders)]
     public async Task<IActionResult> GetById(int id)
     {
         var order = await _db.Orders
@@ -53,6 +58,7 @@ public class OrdersController : ControllerBase
 
     // POST /api/orders
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.WriteOrders)]
     public async Task<IActionResult> Create(Order order)
     {
         order.OrderDate = DateTime.UtcNow;
@@ -63,6 +69,7 @@ public class OrdersController : ControllerBase
 
     // DELETE /api/orders/{id}
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthPolicies.WriteOrders)]
     public async Task<IActionResult> Delete(int id)
     {
         var order = await _db.Orders.FindAsync(id);
